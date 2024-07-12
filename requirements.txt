@@ -1,0 +1,2 @@
+ultralytics==8.0.120
+git+https://github.com/CASIA-IVA-Lab/FastSAM.git@b4ed20c2fed75eadc5aa7d8b09fedd137b873b52#egg=fastsam
