@@ -87,6 +87,11 @@ def run_video(video_stream, K, ):
     processing_thread.join()
 
 if __name__ == "__main__":
+    # FastSAM https://huggingface.co/spaces/An-619/FastSAM
+    # Used weights
+    # https://huggingface.co/spaces/An-619/FastSAM/resolve/main/weights/FastSAM.pt
+
+    # C922 Pro Stream Webcam camera intrinsic
     # https://www.calibdb.net/
     K = np.array([[632.11326486, 0., 316.16980761],
                   [0., 630.54696352, 233.72252151],

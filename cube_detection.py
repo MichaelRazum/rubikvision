@@ -1,10 +1,11 @@
+import os
 import clip
 import cv2
 import numpy as np
 from fastsam import FastSAMPrompt, FastSAM
 
 def get_model():
-    model_path = '/home/mira/Projects/FastSAM/weights/FastSAM.pt'
+    model_path = os.path.join(os.path.dirname(__name__), 'weights','FastSAM.pt')
     model = FastSAM(model_path)
     return model
 
