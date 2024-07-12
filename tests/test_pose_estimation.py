@@ -399,7 +399,7 @@ def test_reverse_rows():
 
 
 @pytest.mark.parametrize('img_id', range(13))
-def test_cube_pose_estimation_happy_path(img_id, cube_seg, datadir):
+def test_cube_pose_estimation_happy_path(img_id, cube_seg, datadir,  plot=True):
     # https://www.calibdb.net/
     # Logitech C922 PRO
     K = np.array([[632.11326486, 0., 316.16980761],
@@ -409,31 +409,11 @@ def test_cube_pose_estimation_happy_path(img_id, cube_seg, datadir):
     img_path = os.path.join(datadir, f'cubepic_{img_id}.jpg')
     img = cv2.imread(img_path)
     box, _ = cube_seg.detect_cube(img)
-    rvec, tvec = estimate_cube_pose(cube_seg, box, img, K, dist_coeffs)
-    points3dall = np.vstack(get_cube_surfaces(as_np_arrays=True))
-    if True:
-        cube_length = 0.057  # cm
-
+    rvec, tvec,_,_ = estimate_cube_pose(cube_seg, box, img, K, dist_coeffs)
+    if plot:
         cube_points = get_cube_edges()
-        # Project 3D points to 2D image plane
         imgpts, _ = cv2.projectPoints(cube_points, rvec, tvec, K, dist_coeffs)
         img_with_cube = draw_cube_adaptive_edges(img.copy(), imgpts)
-        # img_with_cube = draw_cube_wireframe(img.copy(), imgpts)
-
-        # Display the result
         cv2.imshow('Rubik\'s Cube Projection (5.7 cm)', img_with_cube)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
-        #
-        # if False:
-        #     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        #     fig, ax = plt.subplots(figsize=(10, 10))
-        #     ax.imshow(img_rgb)
-        #     for point in clust:
-        #         x, y = point
-        #         ax.plot(x, y, 'ro', markersize=10)  # 'ro' means red circle
-        #     # Plot reprojected points
-        #     for point in reprojected_points:
-        #         x, y = point
-        #         ax.plot(x, y, 'bo', markersize=8, label='Reprojected points')
-        #     plt.show()

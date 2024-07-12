@@ -5,7 +5,7 @@ import numpy as np
 from fastsam import FastSAMPrompt, FastSAM
 
 def get_model():
-    model_path = os.path.join(os.path.dirname(__name__), 'weights','FastSAM.pt')
+    model_path = os.path.join(os.path.dirname(__file__), 'weights','FastSAM.pt')
     model = FastSAM(model_path)
     return model
 
@@ -92,6 +92,25 @@ def draw_bounding_box(image, pred, color=(0, 0, 255)):
     top_left = (int(pred['x'] - pred['width'] / 2), int(pred['y'] - pred['height'] // 2))
     bottom_right = (int(pred['x'] + pred['width'] // 2), int(pred['y'] + pred['height'] // 2))
     cv2.rectangle(image, top_left, bottom_right, color, 1)
+
+
+def highlight_points(image, points, projections, ):
+    color_original = (0, 255, 0)  # Green for original points
+    color_estimate = (0, 0, 255)  # Red for estimated points
+
+    # Define shapes sizes
+    circle_radius = 5
+    x_size = 2
+
+    for point, estimate in zip(points, projections):
+        # Draw the original point as a circle
+        cv2.circle(image, (int(point[0]), int(point[1])), circle_radius, color_original, 2)
+
+        cv2.line(image, (int(estimate[0] - x_size), int(estimate[1] - x_size)),
+                 (int(estimate[0] + x_size), int(estimate[1] + x_size)), color_estimate, 2)
+        cv2.line(image, (int(estimate[0] - x_size), int(estimate[1] + x_size)),
+                 (int(estimate[0] + x_size), int(estimate[1] - x_size)), color_estimate, 2)
+
 
 def draw_cube_adaptive_edges(img, imgpts, thickness=1):
     num_samples = 30

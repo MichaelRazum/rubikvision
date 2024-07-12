@@ -101,6 +101,7 @@ def rate_proj_points(points2d, points2d_proj, deviation=2.):
             inliers[i, best_match] = True
 
     count = np.sum(np.any(inliers, axis=0))
+    inlier_points = None
     if count > 0:
         inlier_distances = dist_matrix[inliers]
         mean_error = np.mean(inlier_distances)
@@ -128,7 +129,7 @@ def rate_proj_points(points2d, points2d_proj, deviation=2.):
         mean_error = np.inf
         points_inside_projection = np.inf
 
-    return count, mean_error, points_inside_projection
+    return count, mean_error, points_inside_projection, inlier_points
 
 def rate_proj_result(points3dall, points2d, rvec, tvec, K, dist_coeffs, deviation=2, verbose=False):
     points2d = np.array(points2d, np.float32)
@@ -251,7 +252,7 @@ def estimate_cube_pose(cube_seg:CubeSegmentation,box, img, K, dist_coeffs):
     annotation = cube_seg(roi, segment_everything=True)
     if annotation == []:
         print('COULD NOT SEGMENT CUBE')
-        return None, None
+        return None, None, None, None
     contours = get_square_contours(annotation)
     mid_points = [calculate_midpoint(cnt) for cnt in contours]
     mid_points = shift_points(mid_points, shift=(x_min, y_min))
@@ -270,7 +271,7 @@ def estimate_cube_pose(cube_seg:CubeSegmentation,box, img, K, dist_coeffs):
 
     if estimates == []:
         print('warning could not estimate cube')
-        return None, None
+        return None, None, None, None
 
     points3dall = np.vstack([Q13d, Q23d, Q33d], dtype=np.float32)
     ratings = np.array([rate_proj_result(points3dall=points3dall,
@@ -278,17 +279,18 @@ def estimate_cube_pose(cube_seg:CubeSegmentation,box, img, K, dist_coeffs):
                                          rvec=e[0],
                                          tvec=e[1],
                                          K=K,
-                                         dist_coeffs=dist_coeffs)
+                                         dist_coeffs=dist_coeffs)[:3]
                         for e in estimates
                         ])
     sorting_key = np.lexsort((ratings[:, 1],ratings[:, 2], -ratings[:, 0], ))
     sorted_estimates = [estimates[i] for i in sorting_key]
 
     best_estimate = sorted_estimates[0]
-    rate_proj_result(points3dall=points3dall,
+    best_res = rate_proj_result(points3dall=points3dall,
                      points2d=mid_points,
                      rvec=best_estimate[0],
                      tvec=best_estimate[1],
                      K=K,
                      dist_coeffs=dist_coeffs, verbose=True)
-    return best_estimate[0], best_estimate[1]
+    best_projection = best_res[-1]
+    return best_estimate[0], best_estimate[1], mid_points, best_projection
