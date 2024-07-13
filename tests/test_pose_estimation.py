@@ -5,10 +5,10 @@ import cv2
 from cube_pose import _filter_contour_outliners, find_rubik_surface, \
     find_surface_lowest_left_point, get_ordered_rubik_points, list_to_grid, grid_to_list, rotate_90_clockwise, \
     reverse_rows, \
-    rate_proj_points, get_cube_surfaces, estimate_cube_pose, get_cube_edges
+    rate_proj_points,  estimate_cube_pose, get_cube_edges
 import numpy as np
 
-from cube_detection import draw_cube_adaptive_edges
+from cube_detection import draw_cube_adaptive_edges, highlight_points, extract_cube
 
 
 def __plot_midpoints(mid_points, cluster_list=None):
@@ -71,9 +71,8 @@ def test_filter_contour_outliners():
     areas = [749.5, 948.5, 722.5, 829.0, 811.5, 718.0, 784.5, 551.0, 607.5, 668.5, 762.0, 670.0, 714.5, 625.5, 578.5, 511.0,
              433.5, 690.5, 404.5, 646.5, 380.5, 417.0, 367.5, 416.5, 327.5, 291.5, 785.5, 23689.0]
     got = _filter_contour_outliners(areas=areas)
-    want = np.array([True, True, True, True, True, True, True, True, True, True, True, True, True,
-                            True, True, True, True, True, True, True, True, True, True, True,
-                            False, False, True, False])
+    want = np.array([True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True,
+         True, True, True, True, True, True, True, True, True, False])
     assert (got == want).all()
 
 def test_rate_points():
@@ -299,30 +298,24 @@ def test_get_ordered_rubik_points(points, ordered_points):
     assert ordered_points_got == ordered_points
 
 
-def qtest_find_rubik_surface():
-    DO_PLOT = True
-    mid_points = [(80, 122), (42, 123), (31, 92), (51, 151), (118, 120), (109, 90), (89, 150), (125, 149),
-                  (50, 21), (31, 63), (70, 91), (116, 38), (79, 39), (70, 62), (110, 60), (121, 18), (42, 41), (86, 20)]
-    __plot_midpoints(mid_points)
-    clusters = find_rubik_surface(mid_points)
-    assert len(clusters) == 2
-    expected_clusters = [{(33, 67),(49, 42),(65, 19),(74, 69),(88, 43),(102, 20),(115, 70),(128, 44),(140, 21)},
-                      {(31, 99), (42, 129), (55, 158), (70, 101),(81, 132), (91, 160),(112, 103),(121, 135),(129, 164)}]
-    for clust in clusters:
-        assert set(tuple(c) for c in clust) in expected_clusters
-        if DO_PLOT:
-            __plot_midpoints(mid_points, [1 if list(p) in clust.tolist() else 0 for p in mid_points] )
+def test_find_rubik_surface(plot=False):
+    def assert_and_plot(mid_points, clusters, expected_clusters, plot, MAX_CLUSTERS):
+        assert len(clusters) <= MAX_CLUSTERS, 'To many candidates found'
+        clusters = [set(tuple(c) for c in clust) for clust in clusters]
+        if plot:
+            for clust in clusters:
+                __plot_midpoints(mid_points, [1 if p in clust else 0 for p in mid_points])
+        for clust in  expected_clusters:
+            assert set(tuple(c) for c in clust) in clusters, f'cluster not found {clust}'
+
     mid_points = [(42, 129), (70, 101), (81, 132), (112, 103), (121, 135), (33, 67), (74, 69), (65, 19), (55, 158),
                   (88, 43), (115, 70), (91, 160), (49, 42), (129, 164), (140, 21), (141, 89), (153, 63), (128, 44),
                   (156, 149), (102, 20), (164, 38), (160, 95), (171, 70), (149, 121), (31, 99)]
     clusters = find_rubik_surface(mid_points)
-    assert len(clusters) == 2
-    expected_clusters = [{(33, 67),(49, 42),(65, 19),(74, 69),(88, 43),(102, 20),(115, 70),(128, 44),(140, 21)},
-                      {(31, 99), (42, 129), (55, 158), (70, 101),(81, 132), (91, 160),(112, 103),(121, 135),(129, 164)}]
-    for clust in clusters:
-        assert set(tuple(c) for c in clust) in expected_clusters
-        if DO_PLOT:
-            __plot_midpoints(mid_points, [1 if list(p) in clust.tolist() else 0 for p in mid_points] )
+    expected_clusters = [{(33, 67), (49, 42), (65, 19), (74, 69), (88, 43), (102, 20), (115, 70), (128, 44), (140, 21)},
+                         {(31, 99), (42, 129), (55, 158), (70, 101), (81, 132), (91, 160), (112, 103), (121, 135),
+                          (129, 164)}]
+    assert_and_plot(mid_points=mid_points,clusters=clusters,expected_clusters=expected_clusters,plot=plot,MAX_CLUSTERS=10)
     #Tets 7
     mid_points = [(150, 141), (104, 102), (24, 80), (134, 83), (142, 113), (169, 93), (70, 152), (36, 110), (114, 133),
                   (65, 35), (85, 77), (94, 166), (48, 93), (93, 18), (144, 40), (174, 121), (59, 123), (34, 53),
@@ -330,11 +323,7 @@ def qtest_find_rubik_surface():
     clusters = find_rubik_surface(mid_points)
     expected_clusters = [{(104, 102), (114, 133), (123, 162), (134, 83), (142, 113), (150, 141), (163, 63), (169, 93), (174, 121)},
                          { (34, 53),(59, 65),(65, 35),(85, 77),(90, 47),(93, 18),(115, 59),(118, 29),(144, 40)}]
-
-    for clust in clusters:
-        assert set(tuple(c) for c in clust) in expected_clusters
-        if DO_PLOT:
-            __plot_midpoints(mid_points, [1 if list(p) in clust.tolist() else 0 for p in mid_points] )
+    assert_and_plot(mid_points=mid_points,clusters=clusters,expected_clusters=expected_clusters,plot=plot,MAX_CLUSTERS=10)
     #Tets 10
     mid_points = [(26, 88), (97, 141), (36, 60), (157, 139), (120, 103), (76, 157), (89, 111), (38, 119), (57, 99),
                   (128, 135), (135, 163), (172, 89), (167, 59), (176, 117), (151, 111), (124, 58), (67, 69), (87, 21),
@@ -343,11 +332,34 @@ def qtest_find_rubik_surface():
     expected_clusters = [{(120, 103),(128, 135),(135, 163),(144, 81),(151, 111),(157, 139),(167, 59),(172, 89),(176, 117)},
                          {(36, 60), (63, 40), (67, 69), (87, 21), (92, 48), (99, 80), (117, 29), (124, 58), (148, 37)},
                          {(26, 88),(38, 119),(48, 146),(57, 99),(67, 130),(76, 157),(89, 111),(97, 141),(107, 170)}]
-    for clust in clusters:
-        assert set(tuple(c) for c in clust) in expected_clusters
-        if DO_PLOT:
-            __plot_midpoints(mid_points, [1 if list(p) in clust.tolist() else 0 for p in mid_points] )
+    assert_and_plot(mid_points=mid_points,clusters=clusters,expected_clusters=expected_clusters,plot=plot,MAX_CLUSTERS=10)
 
+    # Added nearby point
+    mid_points = [(26, 88), (97, 141), (36, 60), (157, 139), (120, 103), (76, 157), (89, 111), (38, 119), (57, 99),
+                  (128, 135), (135, 163), (172, 89), (167, 59), (176, 117), (151, 111), (124, 58), (67, 69), (87, 21),
+                  (99, 80), (144, 81), (148, 37), (92, 48), (63, 40), (117, 29), (67, 130), (48, 146), (107, 170),
+                  (152,112)]
+    clusters = find_rubik_surface(mid_points)
+    expected_clusters = [{(120, 103),(128, 135),(135, 163),(144, 81),(151, 111),(157, 139),(167, 59),(172, 89),(176, 117)},
+                         {(36, 60), (63, 40), (67, 69), (87, 21), (92, 48), (99, 80), (117, 29), (124, 58), (148, 37)},
+                         {(26, 88),(38, 119),(48, 146),(57, 99),(67, 130),(76, 157),(89, 111),(97, 141),(107, 170)}]
+    assert_and_plot(mid_points=mid_points,clusters=clusters,expected_clusters=expected_clusters,plot=plot,MAX_CLUSTERS=13)
+
+    mid_points = [(356, 177), (387, 252), (355, 239), (389, 222), (356, 127), (324, 166), (404, 121), (325, 198), (325, 226),
+     (413, 248), (356, 210), (436, 168), (433, 200), (430, 229), (391, 190), (446, 212), (418, 187), (419, 146),
+     (416, 219), (374, 112), (387, 136), (453, 152), (436, 130), (333, 143), (366, 153), (449, 183), (328, 155),
+     (400, 163), (399, 221), (306, 222)]
+    expected_clusters = [{(324, 166),(325, 198),(325, 226),(355, 239),(356, 177),(356, 210),(387, 252),(389, 222),(391, 190)}]
+    clusters = find_rubik_surface(mid_points)
+    assert_and_plot(mid_points=mid_points,clusters=clusters,expected_clusters=expected_clusters,plot=plot,MAX_CLUSTERS=13)
+    mid_points = [(414, 170), (380, 159), (410, 231), (442, 243), (380, 191), (379, 220), (411, 202), (410, 120),
+                  (426, 105), (491, 122), (476, 138), (457, 113), (492, 159), (483, 219), (507, 143), (502, 174),
+                  (448, 181), (497, 202), (468, 239), (488, 191), (442, 129), (445, 213), (477, 178), (472, 210),
+                  (459, 154), (390, 136), (367, 95), (423, 145), (454, 212), (424, 144), (458, 180)]
+    expected_clusters = [{(423, 145), (476, 138), (448, 181), (410, 120), (457, 113), (459, 154), (426, 105), (491, 122), (442, 129)}]
+    clusters = find_rubik_surface(mid_points)
+    assert_and_plot(mid_points=mid_points, clusters=clusters, expected_clusters=expected_clusters, plot=plot,
+                    MAX_CLUSTERS=13)
 
 
 def test_list_to_grid():
@@ -396,9 +408,28 @@ def test_reverse_rows():
         [2, 1, 0]
     ]
 
+@pytest.mark.skip(reason='test only for debugging')
+@pytest.mark.parametrize('img_id', [26,37,38])
+def test_cube_mid_points(img_id, cube_seg, datadir,  plot=True):
+    img_path = os.path.join(datadir, f'cubepic_{img_id}.jpg')
+    img = cv2.imread(img_path)
+
+    cv2.imshow('Rubik\'s Cube Projection (5.7 cm)', img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+    box, _ = cube_seg.detect_cube(img)
+    roi, x_min, y_min = extract_cube(img, box)
+    cv2.imwrite(os.path.join(datadir, f'bad_{img_id}.jpg'), roi)
+    mid_points = cube_seg.get_midpoints(img, box)
+    assert len(mid_points) > 9
+    highlight_points(points=mid_points, projections=[], image=img)
+    cv2.imshow('Rubik\'s Cube Projection (5.7 cm)', img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 
-@pytest.mark.parametrize('img_id', range(13))
+@pytest.mark.parametrize('img_id', range(14))
 def test_cube_pose_estimation_happy_path(img_id, cube_seg, datadir,  plot=True):
     # https://www.calibdb.net/
     # Logitech C922 PRO
@@ -409,7 +440,8 @@ def test_cube_pose_estimation_happy_path(img_id, cube_seg, datadir,  plot=True):
     img_path = os.path.join(datadir, f'cubepic_{img_id}.jpg')
     img = cv2.imread(img_path)
     box, _ = cube_seg.detect_cube(img)
-    rvec, tvec,_,_ = estimate_cube_pose(cube_seg, box, img, K, dist_coeffs)
+    mid_points = cube_seg.get_midpoints(img, box)
+    rvec, tvec,_,_ = estimate_cube_pose(mid_points, K, dist_coeffs)
     if plot:
         cube_points = get_cube_edges()
         imgpts, _ = cv2.projectPoints(cube_points, rvec, tvec, K, dist_coeffs)

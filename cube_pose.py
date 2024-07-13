@@ -2,8 +2,6 @@ import cv2
 import numpy as np
 from scipy.spatial import distance_matrix
 
-from cube_detection import extract_cube, CubeSegmentation
-
 
 def shift_points(points, shift):
     if isinstance(points, np.ndarray):
@@ -203,31 +201,52 @@ def get_all_rotations_and_orders_of_surface_points(points):
     return [grid_to_list(g) for g in grids]
 
 
-def find_rubik_surface(points, CENTER_DIST=10):
+def remove_nearby_points(points, threshold=5):
+    result = []
+    for point in points:
+        if not any(np.linalg.norm(np.array(p) - np.array(point))< threshold for p in result):
+            result.append(point)
+    return result
+
+def find_rubik_surface(points, search=3, CENTER_DIST=10):
+    points = remove_nearby_points(points, threshold=3)
     points = np.array(points)
     midpoints = []
     dist_matrix = distance_matrix(points, points)
     for i, center in enumerate(points):
-        nearest = np.argsort(dist_matrix[i])[1:9]  # Exclude the point itself
+        nearest = np.argsort(dist_matrix[i])
         if len(nearest) < 8:
             continue
-        neighbors = points[nearest]
-        center_dist = np.linalg.norm(np.mean(neighbors, axis=0) - center)
-        if center_dist < CENTER_DIST:
-            print(center, center_dist)
-            hull = cv2.convexHull(neighbors)
-            epsilon = 0.03 * cv2.arcLength(hull, True)
-            approx = cv2.approxPolyDP(hull, epsilon, True)
-            if len(approx) == 4:
-                midpoints.append(np.vstack([center, neighbors]))
+
+        threshold = dist_matrix[i][nearest[3]] / 2
+        nearest_threshold = nearest[ dist_matrix[i][nearest] > threshold]
+
+        if len(nearest_threshold) < 8:
+            continue
+
+        neighbors_idxs = [np.hstack([nearest_threshold[:7],  nearest_threshold[7+i]])
+                          for i in range(min(search, len(nearest_threshold)-7))]
+        neighbors_idxs += [np.hstack([nearest_threshold[:6],  nearest_threshold[6+i+1:6+i+2+1]])
+                          for i in range(min(search, len(nearest_threshold)-7))]
+
+        neighbors_candidates = [points[idxs] for idxs in neighbors_idxs if len(idxs)==8]
+        for neighbors in neighbors_candidates:
+            center_dist = np.linalg.norm(np.mean(neighbors, axis=0) - center)
+            if center_dist < CENTER_DIST:
+                print(center, center_dist)
+                hull = cv2.convexHull(neighbors)
+                epsilon = 0.03 * cv2.arcLength(hull, True)
+                approx = cv2.approxPolyDP(hull, epsilon, True)
+                if len(approx) <= 4:
+                    midpoints.append(np.vstack([center, neighbors]))
     return midpoints
 
 def _filter_contour_outliners(areas):
     areas = np.array(areas)
     med = np.median(areas)
     deviation = np.abs(areas / med)
-    MIN_AREA_DEV = 0.5
-    MAX_AREA_DEV = 2
+    MIN_AREA_DEV = 0.3
+    MAX_AREA_DEV = 2.5
     outliners = np.logical_and(deviation>MIN_AREA_DEV, deviation< MAX_AREA_DEV)
     return outliners
 
@@ -247,16 +266,14 @@ def get_square_contours(annotations):
     ret = [cnt for n, cnt in enumerate(ret) if filter[n]]
     return ret
 
-def estimate_cube_pose(cube_seg:CubeSegmentation,box, img, K, dist_coeffs):
-    roi, x_min, y_min = extract_cube(img, box)
-    annotation = cube_seg(roi, segment_everything=True)
-    if annotation == []:
-        print('COULD NOT SEGMENT CUBE')
+def estimate_cube_pose(mid_points, K, dist_coeffs):
+    if mid_points == [] or len(mid_points) < 4:
+        print('warning got empty midpoints')
         return None, None, None, None
-    contours = get_square_contours(annotation)
-    mid_points = [calculate_midpoint(cnt) for cnt in contours]
-    mid_points = shift_points(mid_points, shift=(x_min, y_min))
     clusters = find_rubik_surface(mid_points)
+    if len(clusters) == 0:
+        print('warning got empty midpoints')
+        return None, None, None, None
     ordered_clusters = [get_ordered_rubik_points(clust) for clust in clusters]
     rotated_clusters = [clust for clust_er in ordered_clusters
                         for clust in get_all_rotations_and_orders_of_surface_points(clust_er)]
@@ -291,6 +308,6 @@ def estimate_cube_pose(cube_seg:CubeSegmentation,box, img, K, dist_coeffs):
                      rvec=best_estimate[0],
                      tvec=best_estimate[1],
                      K=K,
-                     dist_coeffs=dist_coeffs, verbose=True)
+                     dist_coeffs=dist_coeffs, verbose=False)
     best_projection = best_res[-1]
     return best_estimate[0], best_estimate[1], mid_points, best_projection

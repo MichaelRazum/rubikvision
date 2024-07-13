@@ -7,6 +7,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import math
 
+from cube_detection import draw_bounding_box
 
 def fit_hexagon(contour, target_points=6):
     perimeter = cv2.arcLength(contour, True)
@@ -23,9 +24,6 @@ def fit_hexagon(contour, target_points=6):
             raise ValueError("Unable to find target points. Check your contour.")
     return approx
 
-
-def draw_bounding_box(overlay, pred_2, color):
-    pass
 
 
 def plot_compare_img_detection(img, annotation, pred_1, pred_2):
@@ -46,7 +44,7 @@ def plot_compare_img_detection(img, annotation, pred_1, pred_2):
 
 
 @pytest.mark.parametrize('img_id', range(13))
-def test_find_cube_compare_roboflow_and_fastSAM(img_id, model_yolo, cube_seg, datadir, plot=True):
+def test_find_cube_compare_roboflow_and_fastSAM(img_id, model_yolo, cube_seg, datadir, plot=False):
     if img_id == 9:
         pytest.xfail("Roboflow model doesn't return an accurate detection")
 
@@ -60,12 +58,14 @@ def test_find_cube_compare_roboflow_and_fastSAM(img_id, model_yolo, cube_seg, da
     # Fast SAM Cube Detection
     pred_2, annotation =  cube_seg.detect_cube(img)
 
+    PIXEL_TOL_ERR = 20
+    for key in pred_2:
+        assert math.isclose(pred_2[key], pred_1[key], abs_tol=PIXEL_TOL_ERR)
     # *** PLOT ***
     if plot:
         plot_compare_img_detection(img, annotation, pred_1, pred_2)
-        PIXEL_TOL_ERR = 20
-        for key in pred_2:
-            assert math.isclose(pred_2[key], pred_1[key], abs_tol=PIXEL_TOL_ERR)
+
+
 
 @pytest.mark.parametrize('img_id', range(13))
 def test_find_hexagon(img_id, cube_seg, datadir, plot=False):
