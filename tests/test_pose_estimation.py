@@ -4,8 +4,7 @@ from matplotlib import pyplot as plt, cm
 import cv2
 from cube_pose import _filter_contour_outliners, find_rubik_surface, \
     find_surface_lowest_left_point, get_ordered_rubik_points, list_to_grid, grid_to_list, rotate_90_clockwise, \
-    reverse_rows, \
-    rate_proj_points, estimate_cube_pose, get_cube_edges
+    reverse_rows, rate_proj_points, estimate_cube_pose, get_cube_edges, get_surfaces_Q1_Q2_Q3
 import numpy as np
 
 from cube_detection import draw_cube_adaptive_edges, highlight_points, extract_cube
@@ -452,7 +451,7 @@ def test_cube_mid_points(img_id, cube_seg, datadir,  plot=True):
 
 
 @pytest.mark.parametrize('img_id', range(14))
-def test_cube_pose_estimation_happy_path(img_id, cube_seg, datadir,  plot=True):
+def test_cube_pose_estimation_happy_path(img_id, cube_seg, datadir,  plot=False):
     # https://www.calibdb.net/
     # Logitech C922 PRO
     K = np.array([[632.11326486, 0., 316.16980761],
@@ -490,6 +489,5 @@ def test_get_surface2proj():
          [110.36, 254.7], [121.96, 283.61], [138.61, 225], [149.61, 256.8], [159.68, 285.93], [180.46, 226.89]], )
 
 
-    surf2proj = get_surface(rvec=rvec, tvec=tvec, K=K, dist_coeffs=dist_coeffs, inliners=inliners)
-    for success, _ in surf2proj.values():
-        assert success == True
+    success ,surf2proj = get_surfaces_Q1_Q2_Q3(rvec=rvec, tvec=tvec, K=K, dist_coeffs=dist_coeffs, inliners=inliners)
+    assert success == True

@@ -7,7 +7,8 @@ from matplotlib import pyplot as plt
 import numpy as np
 import math
 
-from cube_detection import draw_bounding_box
+from cube_detection import draw_bounding_box, CubeSegmentation
+
 
 def fit_hexagon(contour, target_points=6):
     perimeter = cv2.arcLength(contour, True)
@@ -68,10 +69,10 @@ def test_find_cube_compare_roboflow_and_fastSAM(img_id, model_yolo, cube_seg, da
 
 
 @pytest.mark.parametrize('img_id', range(13))
-def test_find_hexagon(img_id, cube_seg, datadir, plot=False):
+def test_find_hexagon(img_id, cube_seg:CubeSegmentation, datadir, plot=False):
     img_path = os.path.join(datadir, f'cubepic_{img_id}.jpg')
     img = cv2.imread(img_path)
-    annotation = cube_seg(img)
+    annotation = cube_seg.segment_cube(img)
     contours, _ = cv2.findContours(annotation.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     contour = contours[0]
     fitted_hexagon = fit_hexagon(contour)

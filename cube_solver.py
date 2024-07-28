@@ -305,7 +305,16 @@ class CubeSolver:
         return len(inliners) >= MIN_INLINERS
 
     def estimate_color(self, img, point):
-        return self.clf.predict(img[int(point[1]), int(point[0]),])
+        max_y, max_x, _ = img.shape
+        y, x  = int(point[1]), int(point[0])
+        predictions = []
+        for i in range(-1,2):
+            for j in range(-1,2):
+                y_new = min(max(int(y + i),0), max_y)
+                x_new = min(max(int(x + j),0), max_x)
+                predictions.append(self.clf.predict(img[y_new, x_new]))
+        most_commen = Counter(predictions).most_common(1)
+        return most_commen[0][0]
 
     def map_surface(self, img, surf_mids):
         colors = []
