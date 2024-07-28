@@ -5,10 +5,11 @@ import cv2
 from cube_pose import _filter_contour_outliners, find_rubik_surface, \
     find_surface_lowest_left_point, get_ordered_rubik_points, list_to_grid, grid_to_list, rotate_90_clockwise, \
     reverse_rows, \
-    rate_proj_points,  estimate_cube_pose, get_cube_edges
+    rate_proj_points, estimate_cube_pose, get_cube_edges
 import numpy as np
 
 from cube_detection import draw_cube_adaptive_edges, highlight_points, extract_cube
+from cube_solver import _flip_list
 
 
 def __plot_midpoints(mid_points, cluster_list=None):
@@ -66,6 +67,27 @@ def __plot_midpoints(mid_points, cluster_list=None):
 
     plt.grid(True)
     plt.show()
+
+def test_flip_list():
+    list = [0,1,2,
+            3,4,5,
+            6,7,8]
+    assert _flip_list(list, 8) == _flip_list(list, 0) == [0, 3, 6,
+                                                          1, 4, 7,
+                                                          2, 5, 8]
+
+    assert _flip_list(list, 6) == _flip_list(list, 2) == [8, 5, 2,
+                                                          7, 4, 1,
+                                                          6, 3, 0]
+
+    assert _flip_list(list, 7) == _flip_list(list, 1) == [2, 1, 0,
+                                                          5, 4, 3,
+                                                          8, 7, 6, ]
+
+    assert _flip_list(list, 5) == _flip_list(list, 3) == [6, 7, 8,
+                                                          3, 4, 5,
+                                                          0, 1, 2, ]
+
 
 def test_filter_contour_outliners():
     areas = [749.5, 948.5, 722.5, 829.0, 811.5, 718.0, 784.5, 551.0, 607.5, 668.5, 762.0, 670.0, 714.5, 625.5, 578.5, 511.0,
@@ -441,7 +463,7 @@ def test_cube_pose_estimation_happy_path(img_id, cube_seg, datadir,  plot=True):
     img = cv2.imread(img_path)
     box, _ = cube_seg.detect_cube(img)
     mid_points = cube_seg.get_midpoints(img, box)
-    rvec, tvec,_,_ = estimate_cube_pose(mid_points, K, dist_coeffs)
+    rvec, tvec,_, _= estimate_cube_pose(mid_points, K, dist_coeffs)
     if plot:
         cube_points = get_cube_edges()
         imgpts, _ = cv2.projectPoints(cube_points, rvec, tvec, K, dist_coeffs)
@@ -449,3 +471,25 @@ def test_cube_pose_estimation_happy_path(img_id, cube_seg, datadir,  plot=True):
         cv2.imshow('Rubik\'s Cube Projection (5.7 cm)', img_with_cube)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
+
+def test_get_surface2proj():
+    K = np.array([[632.11326486, 0., 316.16980761],
+                  [0., 630.54696352, 233.72252151],
+                  [0., 0., 1.]])
+    dist_coeffs = np.zeros((4, 1))
+    tvec = np.array([[-0.096714],
+                     [-0.049903],
+                     [0.31287]])
+    rvec = np.array([[0.59608],
+                     [1.6666],
+                     [0.56853]])
+    inliners = np.array(
+        [[131.74, 144.25], [116.59, 167.28], [99.912, 192.63], [169.12, 145.1], [155.62, 168.42], [140.74, 194.12],
+         [207.28, 145.97], [195.5, 169.59], [182.51, 195.65], [230.02, 163.01], [219.53, 187.07], [207.98, 213.57],
+         [236.33, 194.23], [226.58, 218.73], [215.87, 245.61], [233.06, 247.87], [223.1, 274.98], [97.699, 223.16],
+         [110.36, 254.7], [121.96, 283.61], [138.61, 225], [149.61, 256.8], [159.68, 285.93], [180.46, 226.89]], )
+
+
+    surf2proj = get_surface(rvec=rvec, tvec=tvec, K=K, dist_coeffs=dist_coeffs, inliners=inliners)
+    for success, _ in surf2proj.values():
+        assert success == True

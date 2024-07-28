@@ -1,31 +1,15 @@
 import os
-import subprocess
 import cv2
 import threading
 import queue
 import numpy as np
 import torch
 
-from cube_pose import estimate_cube_pose, get_cube_edges
-from cube_detection import CubeSegmentation, draw_cube_adaptive_edges, draw_bounding_box, highlight_points, \
-    CubeSegmentationRoboflow
-
-
-def find_webcam_index(device_name):
-    command = "v4l2-ctl --list-devices"
-    output = subprocess.check_output(command, shell=True, text=True)
-    devices = output.split('\n\n')
-
-    for device in devices:
-        #print(device)
-        if device_name in device:
-            lines = device.split('\n')
-            for line in lines:
-                if "video" in line:
-                    parts = line.split()
-                    for part in parts:
-                        if part.startswith('/dev/video'):
-                            return (part)
+from color_classifier import ColorClassiferKmeans
+from cube_pose import estimate_cube_pose, get_cube_edges, get_surfaces_Q1_Q2_Q3
+from cube_detection import CubeSegmentation, draw_cube_adaptive_edges, draw_bounding_box, highlight_points
+from cube_solver import CubeSolver
+from utils import find_webcam_index
 
 
 def get_auto_index(dataset_dir='image_out', dataset_name_prefix = '', data_suffix = 'mp4'):
@@ -48,11 +32,11 @@ def estimate_cube_pose_que(K, dist_coeffs, cube_seg: CubeSegmentation, frame_que
             continue
         mid_points = cube_seg.get_midpoints(frame, box)
 
-        rvec, tvec, midpoints, projection = estimate_cube_pose(mid_points=mid_points, K=K, dist_coeffs=dist_coeffs)
+        rvec, tvec, midpoints, projection_inliners = estimate_cube_pose(mid_points=mid_points, K=K, dist_coeffs=dist_coeffs)
         if rvec is not None:
-            result_queue.put((box, tvec, rvec, midpoints, projection))
+            result_queue.put((box, tvec, rvec, midpoints, projection_inliners, frame))
 
-        if SAVE_IMAGES and rvec is None or projection is None or len(mid_points) < 8 or len(projection)<8 :
+        if SAVE_IMAGES and rvec is None or projection_inliners is None or len(mid_points) < 8 or len(projection_inliners)<8 :
             print('saving image')
             i = get_auto_index(dataset_dir='image_out/', data_suffix='jpg')
             fname = 'image_out/cubepic_' + str(i) + '.jpg'
@@ -65,8 +49,7 @@ def highlight_cube(frame, tvec, rvec):
     return img
 
 
-
-def run_video(video_stream, K, plot_bounding_box=False, plot_projection=True):
+def run_video(video_stream, K, plot_bounding_box=False, plot_projection=True, plot_cube_state=True, rotate_img=False):
     cap = cv2.VideoCapture(video_stream)
 
     frame_queue = queue.Queue(maxsize=1)
@@ -75,7 +58,7 @@ def run_video(video_stream, K, plot_bounding_box=False, plot_projection=True):
     processing_thread = threading.Thread(target=estimate_cube_pose_que, args=(K, dist_coeffs, cube_seg, frame_queue, result_queue))
     processing_thread.start()
 
-    last_box, last_tvec, last_rvec, last_midponts, last_proj = None, None, None, None, None
+    last_box, last_tvec, last_rvec, last_midponts, last_proj, last_frame = None, None, None, None, None, None
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -83,8 +66,20 @@ def run_video(video_stream, K, plot_bounding_box=False, plot_projection=True):
 
         # Try to get the latest result without blocking
         try:
-            last_box, last_tvec, last_rvec,  last_midponts, last_proj = result_queue.get_nowait()
+            last_box, last_tvec, last_rvec,  last_midponts, last_proj, last_frame  = result_queue.get_nowait()
         except queue.Empty:
+            pass
+
+        # Try to set cube state
+        try:
+            success, proj2d_s = get_surfaces_Q1_Q2_Q3(rvec=last_rvec,
+                                                      tvec=last_tvec,
+                                                      K=K,
+                                                      dist_coeffs=dist_coeffs,
+                                                      inliners=last_proj)
+            if success:
+                cube_solver.update_cube(img=last_frame, proj2d_s=proj2d_s)
+        except Exception as e:
             pass
 
         # Highlight the cube using the last known position
@@ -99,7 +94,14 @@ def run_video(video_stream, K, plot_bounding_box=False, plot_projection=True):
                 if last_midponts is not None and last_proj is not None:
                     highlight_points(points=last_midponts, projections=last_proj, image=image)
 
-        cv2.imshow('Cube Highlighter', image)
+            if plot_cube_state:
+                cube_solver.cube_state.plot(image)
+
+        if rotate_img:
+            cv2.imshow('img', cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE))
+        else:
+            cv2.imshow('img',image)
+
         while True:
             try:
                 frame_queue.get_nowait()  # Remove old frame if exists
@@ -138,6 +140,8 @@ if __name__ == "__main__":
     SAVE_IMAGES = False
 
     cube_seg = CubeSegmentation(device=device)
+    color_cls = ColorClassiferKmeans().load()
+    cube_solver = CubeSolver(color_cls)
     # cube_seg = CubeSegmentationRoboflow(device=device)
     video_stream = find_webcam_index("C922 Pro Stream Webcam")
-    run_video(video_stream=video_stream, K=K, plot_bounding_box=False, plot_projection=True)
+    run_video(video_stream=video_stream, K=K, plot_bounding_box=False, plot_projection=True, plot_cube_state=True)

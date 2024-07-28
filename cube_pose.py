@@ -127,7 +127,14 @@ def rate_proj_points(points2d, points2d_proj, deviation=2.):
         mean_error = np.inf
         points_inside_projection = np.inf
 
-    return count, mean_error, points_inside_projection, inlier_points
+    # Assuming that the last part of the points is the upper part of the cube, only necessary for orrientation
+    N = len(points2d_proj)//3
+    mid_1 = np.mean(points2d_proj[0:N], axis=0)
+    mid_2 = np.mean(points2d_proj[N:N*2], axis=0)
+    mid_3 = np.mean(points2d_proj[N*2:], axis=0)
+    top_oriented = mid_3[0] < mid_2[0] and mid_3[0]<mid_1[0]
+
+    return count, mean_error, points_inside_projection, top_oriented, inlier_points
 
 def rate_proj_result(points3dall, points2d, rvec, tvec, K, dist_coeffs, deviation=2, verbose=False):
     points2d = np.array(points2d, np.float32)
@@ -311,3 +318,14 @@ def estimate_cube_pose(mid_points, K, dist_coeffs):
                      dist_coeffs=dist_coeffs, verbose=False)
     best_projection = best_res[-1]
     return best_estimate[0], best_estimate[1], mid_points, best_projection
+
+def get_surfaces_Q1_Q2_Q3(rvec, tvec, K, dist_coeffs, inliners, MIN_MATCH_FOR_SUCC=3):
+    proj2d_s = []
+    success = True
+    for n, Q3d in enumerate(get_cube_surfaces(as_np_arrays=True)):
+        proj = reproject_points(Q3d, rvec, tvec, K, dist_coeffs)
+        diff = np.abs(inliners[:, np.newaxis, :] - proj[np.newaxis, :, :])
+        matches = np.sum(np.all(diff <= 0.01, axis=2))
+        success = (matches >= MIN_MATCH_FOR_SUCC) and success
+        proj2d_s.append(proj)
+    return success, proj2d_s
