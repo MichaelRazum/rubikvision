@@ -23,12 +23,7 @@ def test_is_estimation_ok(solver):
 
 def test_estimate_color(solver:CubeSolver):
     red_image = np.array([[[255, 0, 0] for _ in range(5)] for _ in range(5)], dtype=np.uint8)
-    red_image = solver.clf.bgr2clf_format(red_image)
-    color = solver.estimate_color(red_image,[2,2])
-    assert color == 'blue'
-    color = solver.estimate_color(red_image,np.array(np.array([2,2])))
-    assert color == 'blue'
-    color = solver.estimate_color(red_image,np.array(np.array([0,0])))
+    color = solver.clf.estimate_colors(red_image, [[2,2]])[0]
     assert color == 'blue'
 
 
@@ -202,6 +197,11 @@ def test_map_whole_cube(cube_down,cube_upper, cube_seg, datadir, solver: CubeSol
     c2c = {'Y':'U', 'R':'F', 'B':'L', 'O':'B', 'G':'R', 'W':'D'}
     visual_cube_notation = ''.join([c2c[s] for s in cube_string])
     assert visual_cube_notation == 'URRLRRBDDBBLDDLLDDULRUBURDDFFUFUBLUDFURRFRBLFBBFFLBUFL'
+
+    solver_notation = solver.cube_state.get_kociemba_string_notation()
+    solution = kociemba.solve(solver_notation)
+    assert solution == "U2 B2 U2 D' R' L' D L' U2 B' R F2 U' F2 R2 U' F2 R2 D B2 U"
+
     if plot:
         solver.cube_state.plot(img_1)
         cv2.imshow("Upper Cube", img_1)

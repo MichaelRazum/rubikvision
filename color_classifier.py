@@ -5,92 +5,47 @@ import cv2
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import LabelEncoder
 import pickle
-
-from utils import find_webcam_index
-
-
-def get_cap():
-    video_stream = find_webcam_index("C922 Pro Stream Webcam")
-    cap = cv2.VideoCapture(video_stream)
-    return cap
-
-
-def sample_colors(colors, N=10):
-    cap = get_cap()
-    samples = {color: [] for color in colors}
-    current_color_index = 0
-
-    def mouse_callback(event, x, y, flags, param):
-        nonlocal current_color_index
-        if event == cv2.EVENT_LBUTTONDOWN:
-            lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)[y, x]
-            samples[colors[current_color_index]].append(lab[1:])
-            if len(samples[colors[current_color_index]]) == N:
-                current_color_index += 1
-
-    cv2.namedWindow("Color Sampler")
-    cv2.setMouseCallback("Color Sampler", mouse_callback)
-
-    while current_color_index < len(colors):
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        cv2.putText(frame, f"Click on {colors[current_color_index]} ({len(samples[colors[current_color_index]])}/{N})",
-                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-
-        cv2.imshow("Color Sampler", frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
-    return samples
-
-
-
-def predict_color(col_clf):
-    cap = get_cap()
-    prediction = "No prediction yet"
-
-    def mouse_callback(event, x, y, flags, param):
-        nonlocal prediction
-        if event == cv2.EVENT_LBUTTONDOWN:
-            lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)[y, x]
-            prediction = col_clf.predict(lab)
-
-    cv2.namedWindow("Color Prediction")
-    cv2.setMouseCallback("Color Prediction", mouse_callback)
-
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        cv2.putText(frame, f"Predicted Color: {prediction}", (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-        cv2.putText(frame, "Click to predict color, 'q' to quit", (10, 60),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-
-        cv2.imshow("Color Prediction", frame)
-
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
+from roboflow import Roboflow
 
 class ColorClassifer(object, metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def predict(self, data: np):
+    def estimate_colors(self, img, points):
         raise NotImplementedError()
 
-    @abc.abstractmethod
     def load(self):
-        raise NotImplementedError()
+        return self
 
-    def bgr2clf_format(self, img):
-        return img
+
+class ColorClassiferRoboflow(ColorClassifer):
+    def __init__(self, RADIUS=4):
+        api_key = os.environ.get('ROBO_KEY')
+        assert api_key is not None, 'enter api key here'
+        rf = Roboflow(api_key=api_key)
+        project = rf.workspace().project("colour-detection")
+        model = project.version(5).model
+        self.model = model
+        self.RADIUS = RADIUS
+
+    def predict(self, data: np):
+        result = self.model.predict(data,).json()
+        return result['predictions'][0]['class']
+
+    def estimate_colors(self, img, points):
+        max_y, max_x, _ = img.shape
+        predictions = []
+        for p in points:
+            box_min_y = max(0, p[1] - self.RADIUS)
+            box_max_y = min(max_y, p[1] + self.RADIUS)
+            box_min_x = max(0, p[0] - self.RADIUS)
+            box_max_x = min(max_x, p[0] + self.RADIUS)
+            prediction = self.predict(img[box_min_y:box_max_y,
+                                          box_min_x:box_max_x,])
+            predictions.append(prediction)
+        return predictions
+
+
+    def load(self):
+        return ColorClassiferRoboflow()
 
 
 class ColorClassiferKmeans(ColorClassifer):
@@ -121,7 +76,6 @@ class ColorClassiferKmeans(ColorClassifer):
         with open(model_path, 'wb') as f:
             pickle.dump((self.clf, self.le), f)
 
-
     def load(self):
         model_path = os.path.join(os.path.dirname(__file__), 'weights', 'color_classifier.pkl')
         with open(model_path, 'rb') as f:
@@ -135,20 +89,24 @@ class ColorClassiferKmeans(ColorClassifer):
         prediction = self.le.inverse_transform([color_index])[0]
         return prediction
 
-def main(train):
+    def estimate_colors(self, img, points):
+        img_lab = self.bgr2clf_format(img)
+        predictions = [self.predict(img_lab[ int(p[1]), int(p[0])]) for p in points]
+        return predictions
 
-    col_clf = ColorClassiferKmeans()
-    if train:
-        colors = ['red', 'orange', 'green', 'white', 'blue', 'yellow']
-        N = 10
-        print("Starting color sampling...")
-        samples = sample_colors(colors, N)
-        col_clf.train_classifier(samples)
-        col_clf.save_classifier()
+class ColorClassfierEnsemble(ColorClassifer):
+    def __init__(self, sensitive_colors:list):
+        self.clf = ColorClassiferKmeans().load()
+        self.clf_robo = ColorClassiferRoboflow()
+        assert sensitive_colors != [], 'enter sensitive colors where roboflow is triggered'
+        self.sensitive_colors = sensitive_colors
 
-    col_clf.load()
-    predict_color(col_clf)
-
-
-if __name__ == "__main__":
-    main(train=False)
+    def estimate_colors(self, img, points):
+        colors = self.clf.estimate_colors(img, points)
+        for n, col in enumerate(colors):
+            if col in self.sensitive_colors:
+                col_rob = self.clf_robo.estimate_colors(img, [points[n]])
+                if not col_rob[0] == col:
+                    print(f'got {col_rob[0]=} {col=} for point {points[n]}')
+                    raise  Exception('Wrong color')
+        return colors

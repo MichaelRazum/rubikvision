@@ -143,13 +143,26 @@ class CubeState:
         if max(Counter(top+left+right).values()) > 9:
             raise CubeStateColorError('Found more than 9 colors')
 
+    def check_consistency_full_map(self):
+        cnt = Counter(self.upper+
+                      self.left+
+                      self.front+
+                      self.down+
+                      self.right+
+                      self.back)
+        state_ok = max(cnt.values()) == min(cnt.values()) == 9
+        if not state_ok:
+            print(f'got bad state {cnt}')
+        return state_ok
+
     def update(self, upper, left, front):
         self.check_consistency(upper, left, front)
         if self.upper == []:
             self.upper = upper
             self.left = left
             self.front = front
-        else:
+
+        elif self.down == []:
             mid_colors = {self.upper[4], self.left[4], self.front[4]}
             mid_colors_new = {upper[4], left[4], front[4]}
             if mid_colors & mid_colors_new :
@@ -157,6 +170,15 @@ class CubeState:
             self.down =  _flip_list(_flip_list(upper, 1),0)
             self.right = _flip_list(_flip_list(front,2),0)
             self.back = _flip_list(_flip_list(left,2),0)
+
+    def reset(self, part='down'):
+        self.down = []
+        self.right = []
+        self.back = []
+        if part == 'all':
+            self.upper = []
+            self.left = []
+            self.front = []
 
     def get_cube_string_notation(self, altenative =False):
         # UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB
@@ -178,6 +200,24 @@ class CubeState:
         string_notation = ''
         for surf in ordered_surface:
             string_notation += "".join([ch[0].upper() for ch in surf])
+        return string_notation
+
+    def get_kociemba_string_notation(self):
+        mapping = {self.upper[4]: 'U',
+                   self.right[4]: 'R',
+                   self.front[4]: 'F',
+                   self.down[4]: 'D',
+                   self.left[4]: 'L',
+                   self.back[4]: 'B'}
+        ordered_surface = [self.upper,
+                           self.right,
+                           self.front,
+                           self.down,
+                           self.left,
+                           self.back]
+        string_notation = ''
+        for surf in ordered_surface:
+            string_notation += "".join([mapping[str] for str in surf])
         return string_notation
 
     def _plot_get_color(self, color_name, color_format='bgr'):
@@ -301,33 +341,16 @@ class CubeSolver:
         self.clf = clf
         self.cube_state = CubeState()
 
+        self.max_atemps_color_estimation = 10
+        self.n_estimate = 0
+
     def is_estimation_ok(self, inliners, MIN_INLINERS=12):
         return len(inliners) >= MIN_INLINERS
 
-    def estimate_color(self, img, point):
-        max_y, max_x, _ = img.shape
-        y, x  = int(point[1]), int(point[0])
-        predictions = []
-        for i in range(-1,2):
-            for j in range(-1,2):
-                y_new = min(max(int(y + i),0), max_y)
-                x_new = min(max(int(x + j),0), max_x)
-                predictions.append(self.clf.predict(img[y_new, x_new]))
-        most_commen = Counter(predictions).most_common(1)
-        return most_commen[0][0]
-
-    def map_surface(self, img, surf_mids):
-        colors = []
-        for p in surf_mids:
-            c = self.estimate_color(img, p)
-            colors.append(c)
-        return colors
-
     def map_cube(self, img, surfaces):
-        img = self.clf.bgr2clf_format(img)
         colors = dict()
         for name, surf in surfaces.items():
-            surf_colors = self.map_surface(img, surf)
+            surf_colors = self.clf.estimate_colors(img, surf)
             colors[name] = surf_colors
         return colors
 
@@ -335,3 +358,11 @@ class CubeSolver:
         alligned_surfaces = align_cube_surfaces(proj2d_s)
         color_map = self.map_cube(img, alligned_surfaces)
         self.cube_state.update(upper=color_map['upper'], left=color_map['left'], front=color_map['front'])
+        if self.cube_state.upper != [] and self.cube_state.down != []:
+            if self.cube_state.check_consistency_full_map() is False:
+                if self.n_estimate >= self.max_atemps_color_estimation:
+                    self.cube_state.reset('all')
+                    self.n_estimate = 0
+                else:
+                    self.cube_state.reset('down')
+                    self.n_estimate += 1

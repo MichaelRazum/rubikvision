@@ -2,10 +2,12 @@ import os
 import cv2
 import threading
 import queue
+
+import kociemba
 import numpy as np
 import torch
 
-from color_classifier import ColorClassiferKmeans
+from color_classifier import ColorClassiferKmeans, ColorClassfierEnsemble
 from cube_pose import estimate_cube_pose, get_cube_edges, get_surfaces_Q1_Q2_Q3
 from cube_detection import CubeSegmentation, draw_cube_adaptive_edges, draw_bounding_box, highlight_points
 from cube_solver import CubeSolver
@@ -95,6 +97,12 @@ def run_video(video_stream, K, plot_bounding_box=False, plot_projection=True, pl
                     highlight_points(points=last_midponts, projections=last_proj, image=image)
 
             if plot_cube_state:
+                try:
+                    solver_notation = cube_solver.cube_state.get_kociemba_string_notation()
+                    solution = kociemba.solve(solver_notation)
+                    print(solution)
+                except:
+                    pass
                 cube_solver.cube_state.plot(image)
 
         if rotate_img:
