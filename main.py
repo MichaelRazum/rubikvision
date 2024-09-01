@@ -66,6 +66,8 @@ def run_video(video_stream, K, plot_bounding_box=False, plot_projection=True, pl
         if not ret:
             break
 
+        if rotate_img:
+            frame =  cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
         # Try to get the latest result without blocking
         try:
             last_box, last_tvec, last_rvec,  last_midponts, last_proj, last_frame  = result_queue.get_nowait()
@@ -97,18 +99,11 @@ def run_video(video_stream, K, plot_bounding_box=False, plot_projection=True, pl
                     highlight_points(points=last_midponts, projections=last_proj, image=image)
 
             if plot_cube_state:
-                try:
-                    solver_notation = cube_solver.cube_state.get_kociemba_string_notation()
-                    solution = kociemba.solve(solver_notation)
-                    print(solution)
-                except:
-                    pass
+                if cube_solver.solution is not None:
+                    print(cube_solver.solution)
                 cube_solver.cube_state.plot(image)
 
-        if rotate_img:
-            cv2.imshow('img', cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE))
-        else:
-            cv2.imshow('img',image)
+        cv2.imshow('img',image)
 
         while True:
             try:
@@ -147,9 +142,10 @@ if __name__ == "__main__":
     # SAVE IMAGES for bad pose estimations
     SAVE_IMAGES = False
 
+
     cube_seg = CubeSegmentation(device=device)
     color_cls = ColorClassiferKmeans().load()
     cube_solver = CubeSolver(color_cls)
     # cube_seg = CubeSegmentationRoboflow(device=device)
     video_stream = find_webcam_index("C922 Pro Stream Webcam")
-    run_video(video_stream=video_stream, K=K, plot_bounding_box=False, plot_projection=True, plot_cube_state=True)
+    run_video(video_stream=video_stream, K=K, plot_bounding_box=False, plot_projection=True, plot_cube_state=True, rotate_img=True)

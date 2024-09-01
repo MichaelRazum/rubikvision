@@ -1,9 +1,11 @@
+import enum
 from collections import Counter
 from dataclasses import dataclass, field
 
 from typing import List
 
 import cv2
+import kociemba
 import webcolors
 
 from color_classifier import ColorClassifer
@@ -161,7 +163,6 @@ class CubeState:
             self.upper = upper
             self.left = left
             self.front = front
-
         elif self.down == []:
             mid_colors = {self.upper[4], self.left[4], self.front[4]}
             mid_colors_new = {upper[4], left[4], front[4]}
@@ -269,9 +270,6 @@ class CubeState:
         for face, x, y in faces:
             draw_face(face, x, y)
 
-
-
-
 def align_cube_surfaces(proj2d_s, is_back=False):
     """
                 -----
@@ -332,14 +330,17 @@ def align_cube_surfaces(proj2d_s, is_back=False):
         'left':  left_rotated,
         'front': right_rotated
     }
-
-
+class ActionState(enum.Enum):
+    ROTATE_CUBE_FOR_BACK_SURF = 0
 
 
 class CubeSolver:
     def __init__(self, clf: ColorClassifer):
         self.clf = clf
         self.cube_state = CubeState()
+
+        self.action_state = []
+        self.solution = None
 
         self.max_atemps_color_estimation = 10
         self.n_estimate = 0
@@ -357,12 +358,29 @@ class CubeSolver:
     def update_cube(self, img, proj2d_s):
         alligned_surfaces = align_cube_surfaces(proj2d_s)
         color_map = self.map_cube(img, alligned_surfaces)
-        self.cube_state.update(upper=color_map['upper'], left=color_map['left'], front=color_map['front'])
+
+        if self.cube_state.upper == []:
+            self.cube_state.update(upper=color_map['upper'], left=color_map['left'], front=color_map['front'])
+            self.action_state.append(ActionState.ROTATE_CUBE_FOR_BACK_SURF)
+        else:
+            self.cube_state.update(upper=color_map['upper'], left=color_map['left'], front=color_map['front'])
+
         if self.cube_state.upper != [] and self.cube_state.down != []:
             if self.cube_state.check_consistency_full_map() is False:
                 if self.n_estimate >= self.max_atemps_color_estimation:
+                    self.action_state = []
                     self.cube_state.reset('all')
                     self.n_estimate = 0
                 else:
                     self.cube_state.reset('down')
                     self.n_estimate += 1
+            else:
+                try:
+                    solver_notation = self.cube_state.get_kociemba_string_notation()
+                    solution = kociemba.solve(solver_notation)
+                    self.solution = solution
+                except Exception:
+                    print('solution not found resetting cube')
+                    self.action_state = []
+                    self.cube_state.reset('all')
+                    self.n_estimate = 0

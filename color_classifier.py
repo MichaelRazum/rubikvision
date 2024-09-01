@@ -76,8 +76,8 @@ class ColorClassiferKmeans(ColorClassifer):
         with open(model_path, 'wb') as f:
             pickle.dump((self.clf, self.le), f)
 
-    def load(self):
-        model_path = os.path.join(os.path.dirname(__file__), 'weights', 'color_classifier.pkl')
+    def load(self, name='color_classifier.pkl'):
+        model_path = os.path.join(os.path.dirname(__file__), 'weights', name)
         with open(model_path, 'rb') as f:
             clf, le = pickle.load(f)
             self.clf = clf

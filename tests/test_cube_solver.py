@@ -12,7 +12,7 @@ from cube_solver import CubeSolver, find_corners, find_closest_corners, align_cu
 
 @pytest.fixture(scope='function')
 def solver():
-    clf = ColorClassiferKmeans().load()
+    clf = ColorClassiferKmeans().load('color_classifier_test.pkl')
     return CubeSolver(clf=clf)
 
 def test_is_estimation_ok(solver):
@@ -91,6 +91,7 @@ def test_update_cube_state():
     front = ['green' for _ in range(9)]
 
     cube_state.update(upper=upper, left=left, front=front)
+
     assert cube_state.upper == upper
     assert cube_state.left == left
     assert cube_state.front == front
@@ -105,7 +106,6 @@ def test_update_cube_state():
     with pytest.raises(CubeStateColorError):
         cube_state.update(upper=upper, left=left, front=front)
 
-
     # Update botton
     down = ['white' for _ in range(9)]
     left = ['green' for _ in range(9)]
@@ -113,7 +113,6 @@ def test_update_cube_state():
     # known colors
     with pytest.raises(CubeStateColorError):
         cube_state.update(upper=down, left=left, front=front)
-
 
     down = ['white' for _ in range(9)]
     left = ['blue' for _ in range(9)]
