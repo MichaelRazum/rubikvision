@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 from fastsam import FastSAMPrompt, FastSAM
 
-from cube_pose import get_square_contours, calculate_midpoint, shift_points
+from rubikvision.cube_pose import get_square_contours, calculate_midpoint, shift_points
 
 
 def get_model():

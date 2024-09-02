@@ -7,11 +7,13 @@ from typing import List
 import cv2
 import kociemba
 import webcolors
-
-from color_classifier import ColorClassifer
 import numpy as np
 
-from cube_pose import rotate_90_clockwise, list_to_grid, grid_to_list, reverse_rows
+
+from rubikvision.color_classifier import ColorClassifer
+from rubikvision.cube_pose import rotate_90_clockwise, list_to_grid, grid_to_list, reverse_rows
+
+
 
 def _flip_list(list, idx):
     assert len(list) == 9

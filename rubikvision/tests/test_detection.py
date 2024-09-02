@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import math
 
-from cube_detection import draw_bounding_box, CubeSegmentation
+from rubikvision.cube_detection import draw_bounding_box, CubeSegmentation
 
 
 def fit_hexagon(contour, target_points=6):

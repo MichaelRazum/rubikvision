@@ -3,7 +3,7 @@ import os
 import pytest
 import torch
 
-from cube_detection import CubeSegmentation
+from rubikvision.cube_detection import CubeSegmentation
 
 
 @pytest.fixture(scope='session')

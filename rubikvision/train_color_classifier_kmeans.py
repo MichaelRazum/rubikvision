@@ -1,6 +1,6 @@
 import cv2
 from color_classifier import ColorClassiferKmeans
-from utils import find_webcam_index
+from rubikvision.utils import find_webcam_index
 
 
 def get_cap():

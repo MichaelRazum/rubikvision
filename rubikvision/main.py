@@ -7,12 +7,11 @@ import kociemba
 import numpy as np
 import torch
 
-from color_classifier import ColorClassiferKmeans, ColorClassfierEnsemble
-from cube_pose import estimate_cube_pose, get_cube_edges, get_surfaces_Q1_Q2_Q3
-from cube_detection import CubeSegmentation, draw_cube_adaptive_edges, draw_bounding_box, highlight_points
-from cube_solver import CubeSolver
-from utils import find_webcam_index
-
+from rubikvision.color_classifier import ColorClassiferKmeans, ColorClassfierEnsemble
+from rubikvision.cube_pose import estimate_cube_pose, get_cube_edges, get_surfaces_Q1_Q2_Q3
+from rubikvision.cube_detection import CubeSegmentation, draw_cube_adaptive_edges, draw_bounding_box, highlight_points
+from rubikvision.cube_solver import CubeSolver
+from rubikvision.utils import find_webcam_index
 
 def get_auto_index(dataset_dir='image_out', dataset_name_prefix = '', data_suffix = 'mp4'):
     max_idx = 1000

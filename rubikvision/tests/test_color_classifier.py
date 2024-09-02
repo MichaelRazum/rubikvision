@@ -1,8 +1,10 @@
-from color_classifier import ColorClassiferKmeans, ColorClassiferRoboflow, ColorClassfierEnsemble
+import pytest
+
+from rubikvision.color_classifier import ColorClassiferKmeans, ColorClassiferRoboflow, ColorClassfierEnsemble
 import numpy as np
 
 def test_classifer_kmean():
-    clf = ColorClassiferKmeans().load()
+    clf = ColorClassiferKmeans().load('color_classifier_test.pkl')
     blue_image = np.array([[[255, 0, 0] for _ in range(5)] for _ in range(5)], dtype=np.uint8)
     colors = clf.estimate_colors(blue_image,[[2,2]])
     assert colors == ['blue']

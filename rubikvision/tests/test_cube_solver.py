@@ -4,9 +4,9 @@ import pytest
 import numpy as np
 import cv2
 
-from color_classifier import ColorClassiferKmeans
-from cube_pose import  estimate_cube_pose, get_surfaces_Q1_Q2_Q3
-from cube_solver import CubeSolver, find_corners, find_closest_corners, align_cube_surfaces, CubeState, \
+from rubikvision.color_classifier import ColorClassiferKmeans
+from rubikvision.cube_pose import  estimate_cube_pose, get_surfaces_Q1_Q2_Q3
+from rubikvision.cube_solver import CubeSolver, find_corners, find_closest_corners, align_cube_surfaces, CubeState, \
     CubeStateColorError
 
 

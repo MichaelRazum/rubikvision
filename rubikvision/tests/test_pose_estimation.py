@@ -2,13 +2,13 @@ import pytest
 import os
 from matplotlib import pyplot as plt, cm
 import cv2
-from cube_pose import _filter_contour_outliners, find_rubik_surface, \
+from rubikvision.cube_pose import _filter_contour_outliners, find_rubik_surface, \
     find_surface_lowest_left_point, get_ordered_rubik_points, list_to_grid, grid_to_list, rotate_90_clockwise, \
     reverse_rows, rate_proj_points, estimate_cube_pose, get_cube_edges, get_surfaces_Q1_Q2_Q3
 import numpy as np
 
-from cube_detection import draw_cube_adaptive_edges, highlight_points, extract_cube
-from cube_solver import _flip_list
+from rubikvision.cube_detection import draw_cube_adaptive_edges, highlight_points, extract_cube
+from rubikvision.cube_solver import _flip_list
 
 
 def __plot_midpoints(mid_points, cluster_list=None):
