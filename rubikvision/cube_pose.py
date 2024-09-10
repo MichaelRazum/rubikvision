@@ -215,7 +215,7 @@ def remove_nearby_points(points, threshold=5):
             result.append(point)
     return result
 
-def find_rubik_surface(points, search=3, CENTER_DIST=10):
+def find_rubik_surface(points, search=3, CENTER_DIST=10, verbose=False):
     points = remove_nearby_points(points, threshold=3)
     points = np.array(points)
     midpoints = []
@@ -240,7 +240,8 @@ def find_rubik_surface(points, search=3, CENTER_DIST=10):
         for neighbors in neighbors_candidates:
             center_dist = np.linalg.norm(np.mean(neighbors, axis=0) - center)
             if center_dist < CENTER_DIST:
-                print(center, center_dist)
+                if verbose:
+                    print(center, center_dist)
                 hull = cv2.convexHull(neighbors)
                 epsilon = 0.03 * cv2.arcLength(hull, True)
                 approx = cv2.approxPolyDP(hull, epsilon, True)
