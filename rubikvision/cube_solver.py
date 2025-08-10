@@ -1,5 +1,6 @@
 import enum
 import threading
+import time
 import traceback
 from collections import Counter, deque
 from copy import deepcopy
@@ -401,10 +402,11 @@ class CubeState:
 
         side = self.midpoint2side[mid_point_0]
         if ccw_errors <= ERROR_TOL:
+            print('DETECT_ROTATION MIDPOINT CCW ERROR')
             return side + "'"
         elif cw_errors <= ERROR_TOL:
+            print('DETECT_ROTATION SUCCESS')
             return side
-
         return None  # No rotation detected within error tolerance
     def get_cube_string_notation(self, altenative =False):
         # UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB
@@ -609,10 +611,10 @@ class CubeSolver:
         self.cube_state = CubeState()
         self.target_state = CubeState()
 
-        self.last_color_map_s = deque(maxlen=30)
+        self.last_color_map_s = deque(maxlen=40)
         self.solution = None
 
-        self.MAX_ATEMPS_COLOR_ESTIMATION = 15
+        self.MAX_ATEMPS_COLOR_ESTIMATION = 10
         self.n_estimate = 0
 
     def is_estimation_ok(self, inliners, MIN_INLINERS=12):
@@ -625,10 +627,14 @@ class CubeSolver:
             colors[name] = surf_colors
         return colors
 
-    def update_cube(self, img, proj2d_s):
+    def update_cube(self, img, proj2d_s, errors_allowed=False):
         alligned_surfaces = align_cube_surfaces(proj2d_s)
         color_map = self.map_cube(img, alligned_surfaces)
+        if errors_allowed:
+            n_estimate = self.n_estimate
         self.update_cube_state(color_map)
+        if errors_allowed:
+            self.n_estimate = n_estimate
 
     def update_cube_state(self, color_map):
         try:
@@ -647,7 +653,7 @@ class CubeSolver:
                     self.cube_state.update(upper=color_map['upper'], left=color_map['left'], front=color_map['front'])
                     self.n_estimate += 1
                 except CubeStateColorError:
-                    self.n_estimate += 0.1
+                    self.n_estimate += 0.2
                 except Exception:
                     self.n_estimate += 1
             else:# orientation update
@@ -677,12 +683,13 @@ class CubeSolver:
                                 self.update_solution(rotation)
                                 self.last_color_map_s.clear()
                     except Exception as e:
+                        traceback.print_exc()
                         print(f'GOT ERROR {e}')
                     self.last_color_map_s.append(color_map)
         except Exception as e:
             print(f"An error occurred: {e}")
             traceback.print_exc()
-            
+
 
     def update_solution(self, rotation=None):
         if rotation is not None and self.solution is not None and rotation == self.solution.split(' ')[0]:
@@ -703,7 +710,8 @@ class CubeSolver:
 class CubePlanner():
     def __init__(self, K,
                  action_executor = None,
-                 WIDTH_CUBE_DETECT = 320):
+                 WIDTH_CUBE_DETECT = 320,
+                 init_thread=True):
         self.image = None
         self.WIDTH_CUBE_DETECT = WIDTH_CUBE_DETECT
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -721,9 +729,9 @@ class CubePlanner():
             action_executor = ActionExecutor()
         self.action_executor = action_executor
         self.box, self.rvec, self.tvec, self.midpoints, self.proj_inliner = None, None, None, None, None
-
-        processing_thread = threading.Thread(target=self.estimation_loop, args=())
-        processing_thread.start()
+        if init_thread:
+            processing_thread = threading.Thread(target=self.estimation_loop, args=())
+            processing_thread.start()
 
     def init_image(self,image, rotate_img):
         image = image.copy()
@@ -748,7 +756,7 @@ class CubePlanner():
 
 
 
-    def plot(self, image, plot_bounding_box=False, plot_projection=True, plot_cube_state=True, plot_action=True):
+    def plot(self, image, plot_bounding_box=False, plot_projection=True, plot_cube_state=True, plot_action=True, action=""):
         if self.tvec is not None and self.rvec is not None:
             self.highlight_cube(image, self.tvec, self.rvec)
 
@@ -765,20 +773,19 @@ class CubePlanner():
                 self.cube_solver.cube_state.plot(image)
 
             if plot_action:
-                self.action_executor.plot_action(image)
+                self.action_executor.plot_action(image, action)
 
-    def estimation_loop(self):
-        while True:
+    def estimate_step(self, busy=False):
+        try:
             frame = self.image
             if frame is None:
-                continue
+                return
             box, _ = self.cube_seg.detect_cube(frame, new_width=self.WIDTH_CUBE_DETECT)
             if box is None:
                 self.box = box
                 print('could not detect cube')
-                continue
+                return
             mid_points = self.cube_seg.get_midpoints(frame, box)
-
             rvec, tvec, midpoints, proj_inliner = estimate_cube_pose(mid_points=mid_points,
                                                                      K=self.K,
                                                                      dist_coeffs=self.dist_coeffs)
@@ -791,14 +798,24 @@ class CubePlanner():
                                                               K=self.K,
                                                               dist_coeffs=self.dist_coeffs,
                                                               inliners=self.proj_inliner)
-                    if success:
-                        self.cube_solver.update_cube(img=frame, proj2d_s=proj2d_s)
+                    if success and busy is False:
+                        self.cube_solver.update_cube(img=frame, proj2d_s=proj2d_s, errors_allowed=busy)
                 except Exception as e:
-                    pass
+                    return
             try:
-                self.action_executor.run(self.cube_solver.cube_state, self.cube_solver.target_state, self.cube_solver.solution)
+                if busy is False:
+                    self.action_executor.run(self.cube_solver.cube_state, self.cube_solver.target_state,
+                                             self.cube_solver.solution)
             except Exception as e:
                 print(f'[action executor error] {e}')
+        except Exception as e:
+            print(f'[cube solver thread] {e}')
+            traceback.print_exc()
+
+    def estimation_loop(self):
+        while True:
+            self.estimate_step()
+
 
 class ActionExecutor:
     def  __init__(self):
@@ -846,7 +863,7 @@ class ActionExecutor:
     def run(self, cube_state: CubeState, target_state: CubeState, solution:str):
         self.current_action = self.get_next_action(cube_state, target_state, solution)
 
-    def plot_action(self, image):
+    def plot_action(self, image, action=""):
         height, width = image.shape[:2]
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 1
@@ -855,4 +872,8 @@ class ActionExecutor:
         text_size = cv2.getTextSize(self.current_action, font, font_scale, font_thickness)[0]
         text_x = (width - text_size[0]) // 2
         text_y = 30
-        cv2.putText(image, self.current_action, (text_x, text_y), font, font_scale, font_color, font_thickness)
+        if not self.current_action:
+            text = f"do {action}"
+        else:
+            text = self.current_action
+        cv2.putText(image, text, (text_x, text_y), font, font_scale, font_color, font_thickness)

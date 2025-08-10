@@ -5,21 +5,28 @@ from rubikvision.utils import find_webcam_index
 
 def get_cap():
     video_stream = find_webcam_index("C922 Pro Stream Webcam")
-    cap = cv2.VideoCapture(video_stream)
+    cap = cv2.VideoCapture(video_stream, cv2.CAP_V4L2)
+    cap.set(cv2.CAP_PROP_AUTO_WB, 0)
+    cap.set(cv2.CAP_PROP_WB_TEMPERATURE, 4700)
+    cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)
+    cap.set(cv2.CAP_PROP_EXPOSURE, 125)
+    cap.set(cv2.CAP_PROP_GAIN, 0)
+    cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
+    cap.set(cv2.CAP_PROP_FOCUS, 0)
     return cap
 
 
-def sample_colors(colors, N=10):
+def sample_colors(colors, N=10, ORANGE_RED_N=20):
     cap = get_cap()
     samples = {color: [] for color in colors}
     current_color_index = 0
-
     def mouse_callback(event, x, y, flags, param):
         nonlocal current_color_index
         if event == cv2.EVENT_LBUTTONDOWN:
             lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)[y, x]
             samples[colors[current_color_index]].append(lab[1:])
-            if len(samples[colors[current_color_index]]) == N:
+            MAX_SAMPLE = N if colors[current_color_index].lower() not in {'red', 'orange'} else ORANGE_RED_N
+            if len(samples[colors[current_color_index]]) ==  MAX_SAMPLE:
                 current_color_index += 1
 
     cv2.namedWindow("Color Sampler")
@@ -59,7 +66,6 @@ def predict_color(col_clf):
         ret, frame = cap.read()
         if not ret:
             break
-
         cv2.putText(frame, f"Predicted Color: {prediction}", (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         cv2.putText(frame, "Click to predict color, 'q' to quit", (10, 60),
@@ -79,9 +85,8 @@ def main(train):
     col_clf = ColorClassiferKmeans()
     if train:
         colors = ['red', 'orange', 'green', 'white', 'blue', 'yellow']
-        N = 10
         print("Starting color sampling...")
-        samples = sample_colors(colors, N)
+        samples = sample_colors(colors, N=10, ORANGE_RED_N=20)
         col_clf.train_classifier(samples)
         col_clf.save_classifier()
 

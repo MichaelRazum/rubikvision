@@ -1,10 +1,11 @@
 import abc
 import os
+import pickle
 import numpy as np
 import cv2
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.preprocessing import LabelEncoder
-import pickle
+from sklearn.svm import SVC
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 from roboflow import Roboflow
 
 class ColorClassifer(object, metaclass=abc.ABCMeta):
@@ -89,9 +90,31 @@ class ColorClassiferKmeans(ColorClassifer):
         prediction = self.le.inverse_transform([color_index])[0]
         return prediction
 
-    def estimate_colors(self, img, points):
+    def estimate_colors(self, img, points, radius=1, threshold=.65):
         img_lab = self.bgr2clf_format(img)
-        predictions = [self.predict(img_lab[ int(p[1]), int(p[0])]) for p in points]
+        h, w = img_lab.shape[:2]
+        predictions = []
+        
+        for p in points:
+            x, y = int(p[0]), int(p[1])
+            
+            # Sample surrounding region
+            samples = []
+            for dy in range(-radius, radius + 1):
+                for dx in range(-radius, radius + 1):
+                    ny, nx = y + dy, x + dx
+                    if 0 <= ny < h and 0 <= nx < w:
+                        samples.append(img_lab[ny, nx])
+            
+            sample_predictions = [self.predict(sample) for sample in samples]
+            colors, counts = np.unique(sample_predictions, return_counts=True)
+            N = len(sample_predictions)
+            n = np.max(counts)
+            if n / N < threshold:
+                raise Exception('unclear prediction')
+            majority_color = colors[np.argmax(counts)]
+            predictions.append(majority_color)
+
         return predictions
 
 class ColorClassfierEnsemble(ColorClassifer):

@@ -1,6 +1,7 @@
 import colorsys
 import os
 import random
+import warnings
 
 import clip
 import cv2
@@ -12,7 +13,9 @@ from rubikvision.cube_pose import get_square_contours, calculate_midpoint, shift
 
 def get_model():
     model_path = os.path.join(os.path.dirname(__file__), 'weights','FastSAM.pt')
-    model = FastSAM(model_path)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        model = FastSAM(model_path)
     return model
 
 
@@ -63,14 +66,14 @@ class CubeSegmentation:
 
 
     def segment_everything(self, frame):
-        everything_results = self.model(frame, device=self.device, retina_masks=True, imgsz=512, conf=0.4, iou=0.9, )
+        everything_results = self.model(frame, device=self.device, retina_masks=True, imgsz=512, conf=0.4, iou=0.9, verbose=False)
         prompt_process = FastTextPrompt(self.clip_model, self.preprocess, frame, everything_results, device=self.device)
         self._last_prompt = prompt_process
         ann = prompt_process.everything_prompt()
         return ann
 
     def segment_cube(self, frame):
-        everything_results = self.model(frame, device=self.device, retina_masks=True, imgsz=640, conf=0.4, iou=0.9, )
+        everything_results = self.model(frame, device=self.device, retina_masks=True, imgsz=640, conf=0.4, iou=0.9, verbose=False)
         prompt_process = FastTextPrompt(self.clip_model, self.preprocess, frame, everything_results, device=self.device)
         self._last_prompt = prompt_process
         ann = prompt_process.text_prompt(text='Cube, Box, Quadrat, 3x3, colored, colors')
@@ -161,8 +164,8 @@ def draw_bounding_box(image, pred, color=(0, 0, 255)):
 def highlight_points(image, points, projections, ):
     color_original = (0, 255, 0)  # Green for original points
     color_estimate = (0, 0, 255)  # Red for estimated points
-    circle_radius = 5
-    x_size = 2
+    circle_radius = 3
+    x_size = 1
     for point in points:
         # Draw the original point as a circle
         cv2.circle(image, (int(point[0]), int(point[1])), circle_radius, color_original, 2)

@@ -8,11 +8,11 @@ def run_video(video_stream, cube_planner, plot_bounding_box=False, plot_projecti
     while True:
         ret, image = cap.read()
         assert ret
-
         cube_planner.init_image(image, rotate_img=rotate_img)
 
         if rotate_img:
             image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+
         cube_planner.plot(image,
                           plot_bounding_box=plot_bounding_box,
                           plot_projection=plot_projection,
